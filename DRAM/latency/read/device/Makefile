@@ -14,6 +14,11 @@ gen:clean
 	aocl library create -o $(LIB) $(OBJ)
 	aoc -no-interleaving DDR -report -save-temps -dot -Werror -g -v -l $(LIB) $(SRCS) -o ../bin/tb_read.aocx
 
+a10pl4:clean
+	srun -p syn2 -w ppxsyn02 aoc -c $(XML) -o $(OBJ)
+	srun -p syn2 -w ppxsyn02 aocl library create -o $(LIB) $(OBJ)
+	srun -p syn2 -w ppxsyn02 aoc -board=a10pl4_dd4gb_gx115_m512 -no-interleaving DDR -report -save-temps -dot -Werror -g -v -l $(LIB) $(SRCS) -o ../bin/tb_read.aocx
+
 emu:
 	aoc -c $(XML) -o $(OBJ)
 	aocl library create -o $(LIB) $(OBJ)
