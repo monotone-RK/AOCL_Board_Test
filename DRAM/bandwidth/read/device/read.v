@@ -60,8 +60,8 @@ module DRAM_READ #(parameter                             MAXBURST_LOG   = 4,
             state           <= 1;
             busy            <= 1;
             address         <= READ_INITADDR;
-            burstnum        <= (READ_NUM + (MAXBURST_NUM-1)) >> MAXBURST_LOG;
             last_burstcount <= (READ_NUM[MAXBURST_LOG-1:0] == 0) ? MAXBURST_NUM : {1'b0, READ_NUM[MAXBURST_LOG-1:0]};
+            burstnum        <= (READ_NUM + (MAXBURST_NUM-1)) >> MAXBURST_LOG;
           end
         end
         ///// send read request /////
@@ -159,7 +159,7 @@ module read(input  wire         clock,
             dot,
             doten,
             ready,
-            ////////// Avalon-MM interface  ///////
+            ////////// Avalon-MM interface  ///////////////
             src_readdata,
             src_readdatavalid,
             src_waitrequest,
