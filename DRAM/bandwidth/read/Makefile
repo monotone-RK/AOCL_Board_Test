@@ -63,8 +63,8 @@ NAME := tb_read
 # DATANUM := 1048576
 # 2 GiB 
 DATANUM := 536870912
-TRY_NUM := 1000
-FREQ    := 281.25
+TRY_NUM := 20
+FREQ    := 285.0
 
 # Make it all!
 all : $(TARGET_DIR)/$(TARGET)

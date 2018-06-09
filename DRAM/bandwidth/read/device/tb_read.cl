@@ -5,5 +5,5 @@ __kernel void tb_read(__global int *restrict Y,
                       __global const int *restrict X,
                       int N)
 {
-  Y[0] = read(X, N);
+  *Y = read(X, N);
 }

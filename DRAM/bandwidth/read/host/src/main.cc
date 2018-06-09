@@ -20,16 +20,17 @@
 // by the laws of the United States of America.
 
 ///////////////////////////////////////////////////////////////////////////////////
-// This host program executes a simple kernel including an RTL module to perform:
-//  if (i%16 == 0) Y += X[i];
-// where X is array data sent to the FPGA and the computation results are stored
-// in Y. 
+// This host program executes a simple kernel including an RTL module to evaluate
+// bandwidth of memory load access
 //
-// Verification is performed on the host CPU.
+// Verification is performed on the RTL module on FPGA.
 ///////////////////////////////////////////////////////////////////////////////////
 
 #include <iostream>
+#include <iomanip>
 #include <cstdlib>
+#include <cstdint>
+#include <limits>
 
 #include "CL/opencl.h"
 #include "AOCLUtils/aocl_utils.h"
@@ -52,10 +53,11 @@ aocl_utils::scoped_array<cl_device_id> device_id;
 
 // Application data on the host PC
 /********************************************************************/
-size_t datanum;                         // the number of integer values
-float  frequency;                       // the operating frequency (assuming MHz)
-aocl_utils::scoped_aligned_ptr<int> Y;  // an array to receive the computation results from the FPGA
-aocl_utils::scoped_aligned_ptr<int> X;  // an array to contain integer data sent to the FPGA
+std::vector<int>                    cycles_list;  // a list to store the elapsed cycles
+aocl_utils::scoped_aligned_ptr<int> X;            // an array to contain integer data sent to the FPGA
+size_t                              datanum;      // the number of integer values
+size_t                              try_num;      // the number of tries
+float                               frequency;    // the operating frequency (assuming MHz)
 
 
 // variable to activate kernel 
@@ -69,7 +71,7 @@ size_t global_item_size[3], local_item_size[3];
 void init_data();
 void init_opencl();
 void run();
-void readbuf();
+void readbuf(size_t i);
 void verify();
 void cleanup();
 
@@ -79,23 +81,22 @@ int main(int argc, char *argv[]) {
 
   // check command line arguments
   if (argc == 1) { std::cout << "usage: ./host <name> <datanum>"          << std::endl; exit(0); }
-  if (argc != 4) { std::cerr << "Error! The number of argument is wrong." << std::endl; exit(1); }
-  name    = argv[1];
-  datanum = std::stoull(std::string(argv[2]));
-  frequency = std::stof(std::string(argv[3]));
+  if (argc != 5) { std::cerr << "Error! The number of argument is wrong." << std::endl; exit(1); }
+  name      = argv[1];
+  datanum   = std::stoull(std::string(argv[2]));
+  try_num   = std::stoull(std::string(argv[3]));
+  frequency = std::stof(std::string(argv[4]));
 
   // Initialization
-  init_data(); init_opencl();
+  init_data(); init_opencl(); cycles_list.resize(try_num);
 
-  // kernel running
-  run();
+  for (size_t i = 0; i < try_num; ++i) {
+    run();      // kernel running
+    readbuf(i); // getting the computation results
+  }
   
-  // getting the computation results
-  readbuf();
-  
-  // verify the computation results and show the kernel execution time
+  // verify the computation results
   verify(); 
-  std::cout << "time : " << aocl_utils::getStartEndTime(kernel_event) * 1.0e-9 << " sec." << std::endl;
   
   // Free the resources allocated
   cleanup();
@@ -106,11 +107,9 @@ int main(int argc, char *argv[]) {
 
 /********************************************************************/
 void init_data() {
-  Y.reset(datanum);
   X.reset(datanum);
   #pragma omp parallel for
   for (size_t i = 0; i < datanum; ++i) {
-    // if (i%16 == 0) X[i] = 1; else X[i] = 0;
     X[i] = i + 1;
   }
 }
@@ -168,7 +167,7 @@ void init_opencl() {
   command_queue = clCreateCommandQueue(context, device_id[0], 0, &status);
 
   // memory object_m
-  Y_buf = clCreateBuffer(context, CL_MEM_WRITE_ONLY | CL_CHANNEL_2_INTELFPGA, sizeof(int)*datanum, NULL, &status);
+  Y_buf = clCreateBuffer(context, CL_MEM_WRITE_ONLY | CL_CHANNEL_2_INTELFPGA, sizeof(int), NULL, &status);
   aocl_utils::checkError(status, "Failed to create buffer for Y");
   X_buf = clCreateBuffer(context, CL_MEM_READ_ONLY | CL_CHANNEL_1_INTELFPGA, sizeof(int)*datanum, NULL, &status);
   aocl_utils::checkError(status, "Failed to create buffer for X");
@@ -193,28 +192,34 @@ void run() {
 
 
 /********************************************************************/
-void readbuf() {
+void readbuf(size_t i) {
   // device to host_m
-  status = clEnqueueReadBuffer(command_queue, Y_buf, CL_TRUE, 0, sizeof(int)*datanum, Y, 1, &kernel_event, &finish_event);
+  status = clEnqueueReadBuffer(command_queue, Y_buf, CL_TRUE, 0, sizeof(int), &cycles_list[i], 1, &kernel_event, &finish_event);
   aocl_utils::checkError(status, "Failed to transfer output Y");
 }
 
 
 /********************************************************************/
 void verify() {
+  bool     error      = false;
+  uint64_t cycles_sum = 0;
   std::cout << std::endl;
-  std::cout << "It takes " << Y[0] << " cycles" << std::endl;  // show result
-  // // verification
-  // int check_value;
-  // if (datanum % 16 == 0) check_value = datanum / 16;
-  // else                   check_value = datanum / 16 + 1;
-  bool pass = (Y[0] != 0);
-  std::cout << "Verification: " << (pass ? "PASS" : "FAIL") << std::endl;
-  if (pass) {
-    unsigned long data_amount = sizeof(int) * datanum;
-    float elapsed_time = float(Y[0]) / (frequency * 1.0e6);
+  #pragma omp parallel for reduction(+:cycles_sum)
+  for (size_t i = 0; i < try_num; ++i) {
+    // std::cout << "It takes " << cycles_list[i] << " cycles" << std::endl;  // show result
+    if (cycles_list[i] == 0) error = true;
+    cycles_sum += cycles_list[i];
+  }
+  if (!error) {
+    float avg_cycles   = (float(cycles_sum) / float(try_num));
+    float elapsed_time = float(avg_cycles) / (frequency * 1.0e6);
+    float bandwidth    = float(sizeof(int) * datanum)/elapsed_time;
+    std::cout << "Verification: PASS" << std::endl;
     std::cout << std::string(50, '-') << std::endl;
-    std::cout << "Memory read bandwidth: " << (float(data_amount)/elapsed_time) * 1.0e-9 << " GB/s (" << elapsed_time << " sec)" << std::endl;
+    std::cout << std::setprecision(std::numeric_limits<float>::max_digits10) << "Avg. cycles: " << avg_cycles << std::endl;
+    std::cout << "Memory read bandwidth: " << bandwidth * 1.0e-9 << " GB/s (" << elapsed_time << " sec)" << std::endl;
+  } else {
+    std::cout << "Error! Evaluation failed..." << std::endl;
   }
 }
 
