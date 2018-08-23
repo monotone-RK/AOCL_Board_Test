@@ -7,9 +7,11 @@ compile:
 gen:clean
 	aoc --report --save-temps --dot -Werror -g -v $(SRCS) -o ../bin/$(NAME).aocx
 
+a10pl4:clean
+	srun -p syn2 -w ppxsyn02 aoc -board=a10pl4_dd4gb_gx115_m512 -report -save-temps -dot -Werror -g -v $(SRCS) -o ../bin/$(NAME).aocx
+
 emu:
 	aoc -march=emulator --report --save-temps --dot -Werror -g -v $(SRCS) -o ../bin/$(NAME).aocx
-	# CL_CONTEXT_EMULATOR_DEVICE_ALTERA=1 bin/host $(NAME) 1024
 
 clean:
 	rm -rf ./$(NAME) $(NAME).aoco $(NAME).aocx ./.emu_models __all_sources.cl
