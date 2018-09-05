@@ -1,0 +1,31 @@
+<RTL_SPEC>
+  <FUNCTION name="wait_func" module="wait_func">
+    <ATTRIBUTES>
+      <IS_STALL_FREE value="no"/>
+      <IS_FIXED_LATENCY value="no"/>
+      <EXPECTED_LATENCY value="10"/>
+      <CAPACITY value="1" />
+      <HAS_SIDE_EFFECTS value="yes"/>
+      <ALLOW_MERGING value="yes"/>
+    </ATTRIBUTES>
+    <INTERFACE>
+      <AVALON port="clock" type="clock"/>
+      <AVALON port="resetn" type="resetn"/>
+
+      <AVALON port="m_valid_in" type="ivalid"/>
+      <AVALON port="m_ready_out" type="oready"/>
+      <AVALON port="m_valid_out" type="ovalid"/>
+      <AVALON port="m_ready_in" type="iready"/>
+
+      <INPUT port="m_input_value" width="64"/>
+      <OUTPUT port="m_output_value" width="64"/>
+
+    </INTERFACE>
+    <C_MODEL>
+      <FILE name="c_model.cl" />
+    </C_MODEL>
+    <REQUIREMENTS>
+      <FILE name="wait_func.v" />
+    </REQUIREMENTS>
+  </FUNCTION>
+</RTL_SPEC>
